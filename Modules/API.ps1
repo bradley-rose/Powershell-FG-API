@@ -276,6 +276,28 @@ function Get-DHCPServer($fg)
     return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
 }
 
+function Set-DHCPServer($fg, $settings)
+{
+    <#
+        .SYNOPSIS
+        Sets DHCP server.
+        .DESCRIPTION
+        Sets DHCP server.
+            FG# config system dhcp server
+            FG(server)# edit 1
+            FG (1)# set X
+        (https://BaseAPIUrl/api/v2/cmdb/system.dhcp/server)
+        .EXAMPLE
+        $dhcpServer = @{"id"="1";"default-gateway"="10.69.69.1";"netmask"="255.255.255.0";"interface"="intName";"ip-range"=@(@{"id"=1;"start-ip"="10.69.69.69";"end-ip"="10.69.69.169";})}
+        Set-DHCPServer $fg $dhcpServer
+    #>
+    
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $uri = $fg.urlBase + "api/v2/cmdb/system.dhcp/server/" + $settings.id
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+}
+
 function Get-SNMPSysInfo($fg)
 {
     <#
@@ -292,7 +314,7 @@ function Get-SNMPSysInfo($fg)
     return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
 }
 
-function Get-SNMPUser($fg)
+function Get-SNMPUser($fg, $specific)
 {
     <#
         .SYNOPSIS
@@ -303,8 +325,15 @@ function Get-SNMPUser($fg)
         (https://BaseAPIUrl/api/v2/cmdb/system.snmp/user)
         .EXAMPLE
         Get-SNMPUser $fg
+        .EXAMPLE
+        Get-SNMPUser $fg "specificSNMPuser"
     #>
+
     $uri = $fg.urlBase + "api/v2/cmdb/system.snmp/user"
+    if ($specific)
+    {
+        $uri += "/$($specific)"
+    }
     return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
 }
 
@@ -349,12 +378,819 @@ function Set-SNMPUser($fg, $settings)
     $jsonSettings = $settings | ConvertTo-Json -Compress
     $uri = $fg.urlBase + "api/v2/cmdb/system.snmp/user"
 
-    try {Invoke-RestMethod -Method GET ($uri + "/$($settings.name)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null}
+    try {
+        Invoke-RestMethod -Method GET ($uri + "/$($settings.name)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
+        return Invoke-RestMethod ($uri + "/$($settings.name)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+    }
     catch [System.InvalidOperationException] {
-        Write-Host -BackgroundColor Black -ForegroundColor Yellow "SNMP user $($settings.name) does not exist. Creating SNMP user $($settings.name)"
         return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method POST -Body $jsonSettings
     }
-    return Invoke-RestMethod ($uri + "/$($settings.name)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+}
+
+function Get-LocalCertificate($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Gets local certificate.
+        .DESCRIPTION
+        Gets local certificate. 
+            FG# get vpn certificate local
+        (https://BaseAPIUrl/api/v2/cmdb/vpn.certificate/local)
+        .EXAMPLE
+        Get-LocalCertificate $fg
+        .EXAMPLE
+        Get-LocalCertificate $fg "certificateName"
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/vpn.certificate/local"
+    if ($specific)
+    {
+        $uri += "/$($specific)"
+    }
+    return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
+}
+
+function Get-Interface($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Gets system interface.
+        .DESCRIPTION
+        Gets system interface. 
+            FG# get sys int
+        (https://BaseAPIUrl/api/v2/cmdb/system/interface)
+        .EXAMPLE
+        Get-Interface $fg 
+        .EXAMPLE
+        Get-Interface $fg "interfaceName"
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/system/interface"
+    if ($specific)
+    {
+        $uri += "/$($specific)"
+    }
+    return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
+}
+
+function Set-Interface($fg, $settings)
+{
+    <#
+        .SYNOPSIS
+        Sets interface settings.
+        .DESCRIPTION
+        Sets interface settings. 
+            FG# config system int 
+            FG (interface) # edit interfaceName
+            FG (interfaceName) # set X
+        (https://BaseAPIUrl/api/v2/cmdb/system/interface)
+        .EXAMPLE
+        $intSettings = @{"name"="internal";"allowaccess"="https http ssh ping";"mode"="dhcp";"status" = "enable";}
+        Set-Interface $fg $intSettings
+    #>
+
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    $uri = $fg.urlBase + "api/v2/cmdb/system/interface"
+
+    try {
+        Invoke-RestMethod -Method GET ($uri + "/$($settings.name)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
+        return Invoke-RestMethod ($uri + "/$($settings.name)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+    }
+    catch [System.InvalidOperationException] {
+        return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method POST -Body $jsonSettings
+    }
+}
+
+function Get-NTP($fg)
+{
+    <#
+        .SYNOPSIS
+        Gets NTP settings.
+        .DESCRIPTION
+        Gets NTP settings. 
+            FG# get system ntp
+        (https://BaseAPIUrl/api/v2/cmdb/system/ntp)
+        .EXAMPLE
+        Get-NTP $fg
+    #>
+    $uri = $fg.urlBase + "api/v2/cmdb/system/ntp"
+    return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json) 
+}
+
+function Set-NTP($fg, $settings)
+{
+    <#
+        .SYNOPSIS
+        Sets NTP settings.
+        .DESCRIPTION
+        Sets NTP settings. 
+            FG# config system ntp
+            FG (ntp) # set X
+        (https://BaseAPIUrl/api/v2/cmdb/system/ntp)
+        .EXAMPLE
+        $ntp = @{"server-mode" = "disable";}
+        Set-NTP $fg $ntp
+    #>
+
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $uri = $fg.urlBase + "api/v2/cmdb/system/ntp"
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+}
+
+function Get-CACert($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Gets CA Certificate.
+        .DESCRIPTION
+        Gets CA Certificate. 
+            FG# get vpn certificate ca
+        (https://BaseAPIUrl/api/v2/cmdb/vpn.certificate/ca)
+        .EXAMPLE
+        Get-CACert $fg 
+        .EXAMPLE
+        Get-CACert $fg "certName"
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/vpn.certificate/ca"
+    if ($specific)
+    {
+        $uri += "/$($specific)"
+    }
+    return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
+}
+
+function Set-CACert($fg, $settings)
+{
+    <#
+        .SYNOPSIS
+        Sets CA Certificate.
+        .DESCRIPTION
+        Sets CA Certificate. 
+            FG# config vpn certificate ca
+            FG (ca)# edit certName
+            FG (certName)# set X
+        (https://BaseAPIUrl/api/v2/cmdb/vpn.certificate/ca)
+        .EXAMPLE
+        $certInfo = @{"ca"="-----BEGIN CERTIFICATE-----ASDFASDF-----END CERTIFICATE-----";"name"="certName"}
+        Set-CACert $fg $certInfo
+    #>
+
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    $uri = $fg.urlBase + "api/v2/cmdb/certificate/ca"
+
+    try {
+        Invoke-RestMethod -Method GET ($uri + "/$($settings.name)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
+        return Invoke-RestMethod ($uri + "/$($settings.name)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+    }
+    catch [System.InvalidOperationException] {
+        return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method POST -Body $jsonSettings
+    }
+}
+
+function Get-RemoteCert($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Gets remote Certificate.
+        .DESCRIPTION
+        Gets remote Certificate. 
+            FG# get vpn certificate remote
+        (https://BaseAPIUrl/api/v2/cmdb/vpn.certificate/remote)
+        .EXAMPLE
+        Get-RemoteCert $fg 
+        .EXAMPLE
+        Get-RemoteCert $fg "certName"
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/vpn.certificate/remote"
+    if ($specific)
+    {
+        $uri += "/$($specific)"
+    }
+    return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
+}
+
+function Set-RemoteCert($fg, $settings)
+{
+    <#
+        .SYNOPSIS
+        Sets remote Certificate.
+        .DESCRIPTION
+        Sets remote Certificate. 
+            FG# config vpn certificate remote
+            FG (remote)# edit certName
+            FG (certName)# set X
+        (https://BaseAPIUrl/api/v2/cmdb/vpn.certificate/remote)
+        .EXAMPLE
+        $certInfo = @{"remote"="-----BEGIN CERTIFICATE-----ASDFASDF-----END CERTIFICATE-----";"name"="certName"}
+        Set-RemoteCert $fg $certInfo
+    #>
+
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    $uri = $fg.urlBase + "api/v2/cmdb/vpn.certificate/remote"
+
+    try {
+        Invoke-RestMethod -Method GET ($uri + "/$($settings.name)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
+        return Invoke-RestMethod ($uri + "/$($settings.name)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+    }
+    catch [System.InvalidOperationException] {
+        return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method POST -Body $jsonSettings
+    }
+}
+
+function Get-FirewallAddress($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Gets firewall address objects.
+        .DESCRIPTION
+        Gets firewall address objects. 
+            FG# get firewall address
+        (https://BaseAPIUrl/api/v2/cmdb/firewall/address)
+        .EXAMPLE
+        Get-FirewallAddress $fg 
+        .EXAMPLE
+        Get-FirewallAddress $fg "addrName"
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/firewall/address"
+    if ($specific)
+    {
+        $uri += "/$($specific)"
+    }
+    return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
+
+}
+
+function Get-FirewallAddressGroup($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Gets firewall address group objects.
+        .DESCRIPTION
+        Gets firewall address group objects. 
+            FG# get firewall addrgrp
+        (https://BaseAPIUrl/api/v2/cmdb/firewall/addrgrp)
+        .EXAMPLE
+        Get-FirewallAddress $fg 
+        .EXAMPLE
+        Get-FirewallAddress $fg "addrgrpName"
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/firewall/addrgrp"
+    if ($specific)
+    {
+        $uri += "/$($specific)"
+    }
+    return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
+}
+
+function Remove-FirewallAddress($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Removes firewall address objects.
+        .DESCRIPTION
+        Removes firewall address objects. 
+            FG# config firewall address
+            FG (address)# delete "addrName" 
+        (https://BaseAPIUrl/api/v2/cmdb/firewall/address)
+        .EXAMPLE
+        Remove-FirewallAddress $fg "addrName" 
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/firewall/address/" + $specific
+    try 
+    {
+        Invoke-RestMethod -Method GET $uri -WebSession $fg.session | Out-Null
+        Write-Host -BackgroundColor Black -Foreground-Color Yellow "$($fg.ipAddress)`: Address group $($specific) deleted."
+        return ((Invoke-RestMethod -Method DELETE $uri -WebSession $fg.session).results | ConvertTo-Json)
+    }
+    catch
+    {
+        Write-Host -BackgroundColor Black -ForegroundColor Green "$($fg.ipAddress)`: Address $($specific) does not exist."
+    }
+}
+
+function Remove-FirewallAddressGroup($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Removes firewall address group objects.
+        .DESCRIPTION
+        Removes firewall address group objects. 
+            FG# config firewall addrgrp
+            FG (address)# delete "grpname" 
+        (https://BaseAPIUrl/api/v2/cmdb/firewall/addrgrp)
+        .EXAMPLE
+        Remove-FirewallAddressGroup $fg "grpName" 
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/firewall/addrgrp/" + $specific
+    try 
+    {
+        Invoke-RestMethod -Method GET $uri -WebSession $fg.session | Out-Null
+        Write-Host -BackgroundColor Black -Foreground-Color Yellow "$($fg.ipAddress)`: Address group $($specific) deleted."
+        return ((Invoke-RestMethod -Method DELETE $uri -WebSession $fg.session).results | ConvertTo-Json)
+    }
+    catch
+    {
+        Write-Host -BackgroundColor Black -ForegroundColor Green "$($fg.ipAddress)`: Address group $($specific) does not exist."
+    }
+}
+
+function Set-FirewallAddress($fg, $settings)
+{
+        <#
+        .SYNOPSIS
+        Sets firewall address objects.
+        .DESCRIPTION
+        Sets firewall address objects. 
+            FG# config firewall address
+            FG (address)# edit "addrName" 
+            FG (addrName)# set X
+        (https://BaseAPIUrl/api/v2/cmdb/firewall/address)
+        .EXAMPLE
+        $addr = @{"name" = "addrName";"subnet"="10.69.69.0 255.255.255.0";}
+        Set-FirewallAddress $fg $addr 
+    #>
+
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    $uri = $fg.urlBase + "api/v2/cmdb/firewall/address"
+
+    try {
+        Invoke-RestMethod -Method GET ($uri + "/$($settings.name)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
+        return Invoke-RestMethod ($uri + "/$($settings.name)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+    }
+    catch [System.InvalidOperationException] {
+        return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method POST -Body $jsonSettings
+    }
+}
+
+function Set-FirewallAddressGroup($fg, $settings)
+{
+        <#
+        .SYNOPSIS
+        Sets firewall address group objects.
+        .DESCRIPTION
+        Sets firewall address group objects. 
+            FG# config firewall addrgrp
+            FG (address)# edit "grpname" 
+            FG (addrName)# set X
+        (https://BaseAPIUrl/api/v2/cmdb/firewall/addrgrp)
+        .EXAMPLE
+        $addrgrp = @{"name" = "grpName";"member"=@(@{"name"="addr1";};@{"name"="addr2";};)}
+        Set-FirewallAddressGroup $fg $addrgrp 
+    #>
+
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    $uri = $fg.urlBase + "api/v2/cmdb/firewall/addrgrp"
+
+    try {
+        Invoke-RestMethod -Method GET ($uri + "/$($settings.name)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
+        return Invoke-RestMethod ($uri + "/$($settings.name)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+    }
+    catch [System.InvalidOperationException] {
+        return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method POST -Body $jsonSettings
+    }
+}
+
+function Get-VPNPhase1($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Gets VPN IPsec Phase 1.
+        .DESCRIPTION
+        Gets VPN IPsec Phase 1.
+            FG# get vpn ipsec phase1-interface
+        (https://BaseAPIUrl/api/v2/cmdb/vpn.ipsec/phase1-interface)
+        .EXAMPLE
+        Get-VPNPhase1 $fg 
+        .EXAMPLE
+        Get-VPNPhase1 $fg "Phase1Name"
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/vpn.ipsec/phase1-interface"
+    if ($specific)
+    {
+        $uri += "/$($specific)"
+    }
+    return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
+}
+
+function Get-VPNPhase2($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Gets VPN IPsec Phase 2.
+        .DESCRIPTION
+        Gets VPN IPsec Phase 2.
+            FG# get vpn ipsec phase2-interface
+        (https://BaseAPIUrl/api/v2/cmdb/vpn.ipsec/phase2-interface)
+        .EXAMPLE
+        Get-VPNPhase2 $fg 
+        .EXAMPLE
+        Get-VPNPhase2 $fg "Phase2Name"
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/vpn.ipsec/phase2-interface"
+    if ($specific)
+    {
+        $uri += "/$($specific)"
+    }
+    return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
+}
+
+function Set-VPNPhase1($fg, $settings)
+{
+    <#
+        .SYNOPSIS
+        Sets VPN IPsec Phase1 interface..
+        .DESCRIPTION
+        Sets VPN IPsec Phase1 interface. 
+            FG# config vpn ipsec phase1-interface
+            FG(phase1-interface)# edit phase1Name
+            FG(phase1Name)# set X
+        (https://BaseAPIUrl/api/v2/cmdb/vpn.ipsec/phase1-interface)
+        .EXAMPLE
+        $phase1VPN = @{"name" = "vpnName";}
+        Set-VPNPhase1 $fg $phase1VPN
+    #>
+
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    $uri = $fg.urlBase + "api/v2/cmdb/vpn.ipsec/phase1-interface"
+
+    try {
+        Invoke-RestMethod -Method GET ($uri + "/$($settings.name)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
+        return Invoke-RestMethod ($uri + "/$($settings.name)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+    }
+    catch [System.InvalidOperationException] {
+        return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method POST -Body $jsonSettings
+    }
+}
+
+function Set-VPNPhase2($fg, $settings)
+{
+    <#
+        .SYNOPSIS
+        Sets VPN Phase II interface.
+        .DESCRIPTION
+        Sets VPN Phase II interface. 
+            FG# config vpn ipsec phase2-interface
+            FG(phase2-interface)# edit phase2Name
+            FG(phase2Name)# set X
+        (https://BaseAPIUrl/api/v2/cmdb/vpn.ipsec/phase2-interface)
+        .EXAMPLE
+        $phase2VPN = @{"name" = "vpnName";}
+        Set-VPNPhase2 $fg $phase2VPN
+    #>
+
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    $uri = $fg.urlBase + "api/v2/cmdb/vpn.ipsec/phase2-interface"
+
+    try {
+        Invoke-RestMethod -Method GET ($uri + "/$($settings.name)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
+        return Invoke-RestMethod ($uri + "/$($settings.name)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+    }
+    catch [System.InvalidOperationException] {
+        return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method POST -Body $jsonSettings
+    }
+
+}
+
+function Get-FirewallPolicy($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Gets firewall policy.
+        .DESCRIPTION
+        Gets firewall policy. 
+            FG# get firewall policy
+        (https://BaseAPIUrl/api/v2/cmdb/firewall/policy)
+        .EXAMPLE
+        Get-FirewallAddress $fg 
+        .EXAMPLE
+        Get-FirewallAddress $fg "policyName"
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/firewall/policy"
+    if ($specific)
+    {
+        $uri += "/$($specific)"
+    }
+    return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
+}
+
+function Set-FirewallPolicy($fg,$settings)
+{
+    <#
+        .SYNOPSIS
+        Sets firewall policy
+        .DESCRIPTION
+        Sets firewall policy. 
+            FG# config firewall policy
+            FG (policy)# edit 1 
+            FG (1)# set X
+        (https://BaseAPIUrl/api/v2/cmdb/firewall/policy)
+        .EXAMPLE
+        $policy = @{"id" = "1";"action"="accept"}
+        Set-FirewallPolicy $fg $policy 
+    #>
+
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    $uri = $fg.urlBase + "api/v2/cmdb/firewall/policy"
+
+    try {
+        Invoke-RestMethod -Method GET ($uri + "/$($settings.policyid)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
+        return Invoke-RestMethod ($uri + "/$($settings.policyid)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+    }
+    catch [System.InvalidOperationException] {
+        return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method POST -Body $jsonSettings
+    }
+}
+
+function Get-StaticRoute($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Gets static route.
+        .DESCRIPTION
+        Gets static route. 
+            FG# get router static 
+        (https://BaseAPIUrl/api/v2/cmdb/router/static)
+        .EXAMPLE
+        Get-StaticRoute $fg 
+        .EXAMPLE
+        Get-StaticRoute $fg "1"
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/router/static"
+    if ($specific)
+    {
+        $uri += "/$($specific)"
+    }
+    return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
+}
+
+function Set-StaticRoute ($fg,$settings)
+{
+    <#
+        .SYNOPSIS
+        Sets static route
+        .DESCRIPTION
+        Sets static route. 
+            FG# config router static
+            FG (static)# edit 1 
+            FG (1)# set X
+        (https://BaseAPIUrl/api/v2/cmdb/router/static)
+        .EXAMPLE
+        $route = @{"id" = "1";"dstaddr"="addrObj"}
+        Set-RouterStatic $fg $route 
+    #>
+
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    $uri = $fg.urlBase + "api/v2/cmdb/router/static/" + $settings.'seq-num'
+
+    try {
+        Invoke-RestMethod -Method GET ($uri) -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
+        return Invoke-RestMethod ($uri) -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+    }
+    catch [System.InvalidOperationException] {
+        $uri = $fg.urlBase + "api/v2/cmdb/router/static"
+        return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method POST -Body $jsonSettings
+    }
+}
+
+function Get-BGPRoute($fg)
+{
+    <#
+        .SYNOPSIS
+        Gets BGP configuration.
+        .DESCRIPTION
+        Gets BGP configuration. 
+            FG# get router bgp 
+        (https://BaseAPIUrl/api/v2/cmdb/router/bgp)
+        .EXAMPLE
+        Get-BGPRoute $fg 
+    #>
+    $uri = $fg.urlBase + "api/v2/cmdb/router/bgp"
+    return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
+}
+
+function Set-BGPRoute($fg, $settings)
+{
+    <#
+        .SYNOPSIS
+        Sets BGP configuration.
+        .DESCRIPTION
+        Sets BGP configuration. 
+            FG# config router bgp 
+        (https://BaseAPIUrl/api/v2/cmdb/router/bgp)
+        .EXAMPLE
+        $bgp = @{"as"=12345;}
+        Set-BGPRoute $fg $bgp
+    #>
+
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $uri = $fg.urlBase + "api/v2/cmdb/router/bgp"
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+}
+
+function Get-RouteMap($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Gets route maps.
+        .DESCRIPTION
+        Gets route maps. 
+            FG# get router route-map 
+        (https://BaseAPIUrl/api/v2/cmdb/router/route-map)
+        .EXAMPLE
+        Get-RouteMap $fg 
+        .EXAMPLE
+        Get-RouteMap $fg "routeMapName"
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/router/route-map"
+    if ($specific)
+    {
+        $uri += "/$($specific)"
+    }
+    return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
+}
+
+function Set-RouteMap($fg, $settings)
+{
+    <#
+        .SYNOPSIS
+        Sets route map
+        .DESCRIPTION
+        Sets route map. 
+            FG# config router route-map
+            FG (route-map)# edit routeMapName
+            FG (routeMapName)# set X
+        (https://BaseAPIUrl/api/v2/cmdb/router/route-map)
+        .EXAMPLE
+        $routeMap = @{"name" = "routeMap";}
+        Set-RouteMap $fg $routeMap 
+    #>
+
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    $uri = $fg.urlBase + "api/v2/cmdb/router/route-map"
+
+    try {
+        Invoke-RestMethod -Method GET ($uri + "/$($settings.name)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
+        return Invoke-RestMethod ($uri + "/$($settings.name)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+    }
+    catch [System.InvalidOperationException] {
+        return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method POST -Body $jsonSettings
+    }
+}
+
+function Set-LDAPUser($fg, $settings)
+{
+    <#
+        .SYNOPSIS
+        Sets LDAP user configuration
+        .DESCRIPTION
+        Sets LDAP user configuration 
+            FG# config user ldap
+            FG (ldap)# edit username
+            FG (username)# set X
+        (https://BaseAPIUrl/api/v2/cmdb/user/ldap)
+        .EXAMPLE
+        $ldap = @{"server" = "10.69.69.69";}
+        Set-LDAPUser $fg $ldap 
+    #>
+
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    $uri = $fg.urlBase + "api/v2/cmdb/user/ldap"
+
+    try {
+        Invoke-RestMethod -Method GET ($uri + "/$($settings.name)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
+        return Invoke-RestMethod ($uri + "/$($settings.name)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+    }
+    catch [System.InvalidOperationException] {
+        return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method POST -Body $jsonSettings
+    }
+}
+
+function Get-UserGroup($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Gets user group.
+        .DESCRIPTION
+        Gets user group. 
+            FG# get user group 
+        (https://BaseAPIUrl/api/v2/cmdb/user/group)
+        .EXAMPLE
+        Get-UserGroup $fg 
+        .EXAMPLE
+        Get-UserGroup $fg "groupName"
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/user/group"
+    if ($specific)
+    {
+        $uri += "/$($specific)"
+    }
+    return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
+}
+
+function Set-UserGroup($fg, $settings)
+{
+    <#
+        .SYNOPSIS
+        Sets user group
+        .DESCRIPTION
+        Sets user group 
+            FG# config user group
+            FG (group)# edit groupName
+            FG (groupName)# set X
+        (https://BaseAPIUrl/api/v2/cmdb/user/group)
+        .EXAMPLE
+        $userGroup = @{"name" = "groupName";}
+        Set-LDAPUser $fg $userGroup 
+    #>
+
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    $uri = $fg.urlBase + "api/v2/cmdb/user/group"
+
+    try {
+        Invoke-RestMethod -Method GET ($uri + "/$($settings.name)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
+        return Invoke-RestMethod ($uri + "/$($settings.name)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+    }
+    catch [System.InvalidOperationException] {
+        return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method POST -Body $jsonSettings
+    }
+}
+
+function Set-SystemAdmin($fg,$settings)
+{
+    <#
+        .SYNOPSIS
+        Set system administrator user
+        .DESCRIPTION
+        Sets system administrator user
+            FG# config system admin
+            FG (group)# edit adminName
+            FG (groupName)# set X
+        (https://BaseAPIUrl/api/v2/cmdb/system/admin)
+        .EXAMPLE
+        $adminConfig = @{"name" = "adminName";}
+        Set-SystemAdmin $fg $adminConfig 
+    #>
+
+    $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
+    $jsonSettings = $settings | ConvertTo-Json -Compress
+    $uri = $fg.urlBase + "api/v2/cmdb/system/admin"
+
+    try {
+        Invoke-RestMethod -Method GET ($uri + "/$($settings.name)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
+        return Invoke-RestMethod ($uri + "/$($settings.name)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+    }
+    catch [System.InvalidOperationException] {
+        return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method POST -Body $jsonSettings
+    }
+}
+
+function Get-SystemAdmin($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Gets system admin.
+        .DESCRIPTION
+        Gets system admin. 
+            FG# get system admin 
+        (https://BaseAPIUrl/api/v2/cmdb/system/admin)
+        .EXAMPLE
+        Get-UserGroup $fg 
+        .EXAMPLE
+        Get-UserGroup $fg "adminName"
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/system/admin"
+    if ($specific)
+    {
+        $uri += "/$($specific)"
+    }
+    return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
 }
 
 <#
@@ -381,5 +1217,4 @@ public static class Dummy {
 }
 "@
 }
-
 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = [dummy]::GetDelegate()
