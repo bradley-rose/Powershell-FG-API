@@ -22,9 +22,10 @@ class FortiGate
     [Int]$port = 443
     [String]$urlBase
     [String]$cookie
+    [String]$hostname
 }
 
-function FGLogin($fgIP, $fgPort)
+function FGLogin($fgIP, $port, $username, $password)
 {
     <#
         .SYNOPSIS
@@ -47,20 +48,27 @@ function FGLogin($fgIP, $fgPort)
 
     $fg = [FortiGate]::new()
     $fg.ipAddress = $fgIP
-    if ($fgPort)
+    if ($port)
     {
-        $fg.port = $fgPort
+        $fg.port = $port
     }
     $fg.urlBase = "https://$($fg.ipAddress)`:$($fg.port)/"
 
-    $Credentials = Get-Credential -Message 'Please enter administrative credentials for your FortiGate'
-    $uri = $fg.urlBase + "logincheck"
-
-
-    $PostParameters = @{
-        "username" = "$($Credentials.username)";
-        "secretkey" = "$($Credentials.GetNetworkCredential().password)";
-        }
+    if ($NULL -eq $username -AND $NULL -eq $password){
+        $Credentials = Get-Credential -Message 'Please enter administrative credentials for your FortiGate'
+        $uri = $fg.urlBase + "logincheck"
+        $PostParameters = @{
+            "username" = "$($Credentials.username)";
+            "secretkey" = "$($Credentials.GetNetworkCredential().password)";
+            }
+    }
+    else {
+        $uri = $fg.urlBase + "logincheck"
+        $PostParameters = @{
+            "username" = "$($username)";
+            "secretkey" = "$($password)";
+            }
+    }
 
     Invoke-WebRequest -Method POST -Uri $uri -Body $PostParameters -SessionVariable FortigateSession | Out-Null
 
@@ -84,8 +92,7 @@ function FGLogout($fg)
     #>
 
     $uri = $fg.urlBase + "logout"
-    Invoke-WebRequest -Method POST -Uri $uri | Out-Null
-
+    Invoke-RestMethod -Method POST -WebSession $fg.session -Uri $uri | Out-Null
 }
 
 function Get-SystemGlobalSettings($fg)
@@ -116,24 +123,17 @@ function Set-SystemGlobalSettings($fg, $settings)
         (https://BaseAPIUrl/api/v2/cmdb/system/global)
         .EXAMPLE
         $globalSettings = @{"hostname" = "newHostname";}
-        Set-SystemGlobal $fg $globalSettings
+        Set-SystemGlobalSettings $fg $globalSettings
     #>
     
     $headers = @{"Content-Type" = "application/json"; "X-CSRFTOKEN" = $fg.cookie}
     $uri = $fg.urlBase + "api/v2/cmdb/system/global"
     $jsonSettings = $settings | ConvertTo-Json -Compress
-    Try
-    {
-        return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
-    }
-    Catch [System.Net.WebException]
-    {
-        Write-Host -BackgroundColor Black -ForegroundColor Cyan "Connection closed due to admin-sport change! Check JSON data for admin-sport value."
-    }
+    return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
 }
 
 
-function Get-SystemGlobalSettings($fg)
+function Get-SystemAutoInstall($fg)
 {
     <#
         .SYNOPSIS
@@ -668,12 +668,12 @@ function Remove-FirewallAddress($fg, $specific)
     try 
     {
         Invoke-RestMethod -Method GET $uri -WebSession $fg.session | Out-Null
-        Write-Host -BackgroundColor Black -Foreground-Color Yellow "$($fg.ipAddress)`: Address group $($specific) deleted."
+        Write-Host -BackgroundColor Black -ForegroundColor Yellow "$($fg.hostname)`: Address group $($specific) deleted."
         return ((Invoke-RestMethod -Method DELETE $uri -WebSession $fg.session).results | ConvertTo-Json)
     }
     catch
     {
-        Write-Host -BackgroundColor Black -ForegroundColor Green "$($fg.ipAddress)`: Address $($specific) does not exist."
+        Write-Host -BackgroundColor Black -ForegroundColor Green "$($fg.hostname)`: Address $($specific) does not exist."
     }
 }
 
@@ -695,12 +695,12 @@ function Remove-FirewallAddressGroup($fg, $specific)
     try 
     {
         Invoke-RestMethod -Method GET $uri -WebSession $fg.session | Out-Null
-        Write-Host -BackgroundColor Black -Foreground-Color Yellow "$($fg.ipAddress)`: Address group $($specific) deleted."
+        Write-Host -BackgroundColor Black -Foreground-Color Yellow "$($fg.hostname)`: Address group $($specific) deleted."
         return ((Invoke-RestMethod -Method DELETE $uri -WebSession $fg.session).results | ConvertTo-Json)
     }
     catch
     {
-        Write-Host -BackgroundColor Black -ForegroundColor Green "$($fg.ipAddress)`: Address group $($specific) does not exist."
+        Write-Host -BackgroundColor Black -ForegroundColor Green "$($fg.hostname)`: Address group $($specific) does not exist."
     }
 }
 
@@ -1141,7 +1141,7 @@ function Set-UserGroup($fg, $settings)
     }
 }
 
-function Set-SystemAdmin($fg,$settings)
+function Set-SystemAdmin($fg,$settings,$name)
 {
     <#
         .SYNOPSIS
@@ -1161,9 +1161,17 @@ function Set-SystemAdmin($fg,$settings)
     $jsonSettings = $settings | ConvertTo-Json -Compress
     $uri = $fg.urlBase + "api/v2/cmdb/system/admin"
 
+    if ($NULL -ne $name)
+    {
+        $adminName = $name
+    }
+    else {
+        $adminName = $settings.name
+    }
+
     try {
-        Invoke-RestMethod -Method GET ($uri + "/$($settings.name)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
-        return Invoke-RestMethod ($uri + "/$($settings.name)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
+        Invoke-RestMethod -Method GET ($uri + "/$($adminName)") -WebSession $fg.session -ErrorAction SilentlyContinue | Out-Null
+        return Invoke-RestMethod ($uri + "/$($adminName)") -Headers $headers -WebSession $fg.session -Method PUT -Body $jsonSettings
     }
     catch [System.InvalidOperationException] {
         return Invoke-RestMethod $uri -Headers $headers -WebSession $fg.session -Method POST -Body $jsonSettings
@@ -1191,6 +1199,33 @@ function Get-SystemAdmin($fg, $specific)
         $uri += "/$($specific)"
     }
     return ((Invoke-RestMethod -Method GET $uri -WebSession $fg.session).results | ConvertTo-Json)
+}
+
+function Remove-SystemAdmin($fg, $specific)
+{
+    <#
+        .SYNOPSIS
+        Removes system administrator account.
+        .DESCRIPTION
+        Removes system administrator account.
+            FG# config system admin
+            FG (address)# delete "adminName" 
+        (https://BaseAPIUrl/api/v2/cmdb/system/admin)
+        .EXAMPLE
+        Remove-SystemAdmin $fg "adminName" 
+    #>
+
+    $uri = $fg.urlBase + "api/v2/cmdb/system/admin/" + $specific
+    try 
+    {
+        Invoke-RestMethod -Method GET $uri -WebSession $fg.session | Out-Null
+        Write-Host -BackgroundColor Black -ForegroundColor Yellow "$($fg.hostname)`: System admin $($specific) deleted."
+        return ((Invoke-RestMethod -Method DELETE $uri -WebSession $fg.session).results | ConvertTo-Json)
+    }
+    catch
+    {
+        Write-Host -BackgroundColor Black -ForegroundColor Green "$($fg.hostname)`: System admin $($specific) does not exist."
+    }
 }
 
 <#
